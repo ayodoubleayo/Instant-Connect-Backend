@@ -1,0 +1,2 @@
+-- Baseline migration for existing Supabase database
+-- Intentionally empty
