@@ -50,18 +50,21 @@ app.use((req, res, next) => {
 /**
  * 🌍 CORS CONFIG (LOCAL + PRODUCTION)
  */
+/**
+ * 🌍 CORS CONFIG (LOCAL + PRODUCTION)
+ */
 const allowedOrigins = [
   "http://localhost:3000",
   "https://instant-connect-frontend-hnh01yaf4-ayodoubleayos-projects.vercel.app",
-    "https://instant-connect-frontend-git-main-ayodoubleayos-projects.vercel.app", 
-
-  process.env.FRONTEND_URL,
+  "https://instant-connect-frontend-git-main-ayodoubleayos-projects.vercel.app",
+  "https://instant-connect-frontend.vercel.app",  // <-- newly added
+  process.env.FRONTEND_URL,                        // optional env override
 ].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
+      if (!origin) return callback(null, true); // allow server-to-server requests
 
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
@@ -72,10 +75,18 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization" ,       "x-request-id",
- ],
+    allowedHeaders: ["Content-Type", "Authorization", "x-request-id"],
   })
 );
+
+// Optional: handle all OPTIONS preflight requests explicitly
+app.options("*", cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-request-id"]
+}));
+
 
 app.use(express.json());
 app.use(cookieParser());
