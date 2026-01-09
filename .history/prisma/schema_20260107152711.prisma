@@ -1,0 +1,375 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public"]
+}
+
+model PayoutRequest {
+  id               String   @id @default(uuid())
+  status           PayoutStatus
+  paidAt           DateTime?
+
+  paidByAdminId    String?
+  paidByAdmin      User?    @relation("AdminPaidPayouts", fields: [paidByAdminId], references: [id])
+
+  createdAt        DateTime @default(now())
+}
+
+
+model User {
+  id                 String              @id @default(uuid())
+  realName           String
+  username           String              @unique
+  email              String              @unique
+  password           String?
+  gender             Gender
+  age                Int
+  location           String?
+    paidPayouts PayoutRequest[] @relation("AdminPaidPayouts")
+
+  latitude           Float?
+  longitude          Float?
+  role               Role                @default(USER)
+  verifiedId         Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  bio                String?
+  preferredTribes    String[]            @default([])
+  profilePhoto       String?
+  relationshipIntent RelationshipIntent?
+  religion           Religion?
+  phone              String?
+  isOnline           Boolean             @default(false)
+  lastSeenAt         DateTime?
+  suspended          Boolean             @default(false)
+  suspendedAt        DateTime?           @map("suspended_at") @db.Timestamp(6)
+  suspensionReason   String?             @map("suspension_reason")
+  supabaseUserId     String?             @unique
+  feedbacks          Feedback[]
+  matchesA           Match[]             @relation("UserA")
+  matchesB           Match[]             @relation("UserB")
+  messages           Message[]
+  paymentsReceived   Payment[]           @relation("PaymentBeneficiary")
+  paymentsMade       Payment[]           @relation("PaymentPayer")
+  photos             Photo[]
+  blocksReceived     UserBlock[]         @relation("Blocked")
+  blocksInitiated    UserBlock[]         @relation("Blocker")
+
+  @@schema("public")
+}
+
+model Photo {
+  id     String @id @default(uuid())
+  url    String
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@schema("public")
+}
+
+model UserBlock {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([blockerId, blockedId], map: "UserBlock_unique_pair")
+  @@index([blockedId])
+  @@schema("public")
+}
+
+model Match {
+  id            String    @id @default(uuid())
+  userAId       String
+  userBId       String
+  agreed        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  price         Int       @default(0)
+  unlocked      Boolean   @default(false)
+  lastSeenUserA DateTime?
+  lastSeenUserB DateTime?
+  userA         User      @relation("UserA", fields: [userAId], references: [id])
+  userB         User      @relation("UserB", fields: [userBId], references: [id])
+  messages      Message[]
+  payments      Payment[]
+
+  @@schema("public")
+}
+
+model Message {
+  id          String    @id @default(uuid())
+  senderId    String
+  matchId     String
+  content     String?
+  imageUrl    String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+  deliveredAt DateTime?
+  seenAt      DateTime?
+  clientId    String?
+  match       Match     @relation(fields: [matchId], references: [id])
+  sender      User      @relation(fields: [senderId], references: [id])
+
+  @@index([clientId])
+  @@schema("public")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  userId        String
+  amount        Int
+  status        PaymentStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+  matchId       String
+  proofUrl      String?
+  reference     String?       @unique
+  beneficiaryId String?
+  benefitScope  BenefitScope  @default(BOTH)
+  beneficiary   User?         @relation("PaymentBeneficiary", fields: [beneficiaryId], references: [id], onDelete: Restrict)
+  match         Match         @relation(fields: [matchId], references: [id])
+  payer         User          @relation("PaymentPayer", fields: [userId], references: [id])
+
+  @@index([beneficiaryId])
+  @@schema("public")
+}
+
+model Report {
+  id         String   @id @default(uuid())
+  reporterId String
+  targetId   String
+  reason     String
+  resolved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@schema("public")
+}
+
+model Feedback {
+  id        String       @id @default(uuid())
+  userId    String
+  type      FeedbackType
+  message   String
+  resolved  Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@schema("public")
+}
+
+model SupabaseProfile {
+  id                  String    @id @db.Uuid
+  gender              String
+  relationship_intent String?
+  latitude            Float?
+  longitude           Float?
+  location            String?
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  users               users     @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("profiles")
+  @@ignore
+  @@schema("public")
+}
+
+ 
+
+
+model PasswordResetToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "password_reset_expiry_idx")
+  @@index([userId], map: "password_reset_user_idx")
+  @@schema("public")
+}
+model users {
+  @@schema("auth")
+  @@ignore
+}
+
+model sessions {
+  @@schema("auth")
+  @@ignore
+}
+
+model refresh_tokens {
+  @@schema("auth")
+  @@ignore
+}
+
+model identities {
+  @@schema("auth")
+  @@ignore
+}
+model audit_log_entries {
+  @@schema("auth")
+  @@ignore
+}
+
+model flow_state {
+  @@schema("auth")
+  @@ignore
+}
+
+model profiles {
+  @@ignore
+}
+
+
+
+enum Role {
+  USER
+  ADMIN
+
+  @@schema("public")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+
+  @@schema("public")
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@schema("public")
+}
+
+enum RelationshipIntent {
+  ONE_NIGHT
+  CASUAL
+  SERIOUS
+  MARRIAGE
+  FRIENDS_WITH_BENEFITS
+  LOOKING_FOR_WOMAN
+  LOOKING_FOR_MAN
+  WALK_PARTNER
+  GYM_PARTNER
+  READING_PARTNER
+  TRAVEL_PARTNER
+  CLUBBING_PARTNER
+  STREET_FRIEND
+  GIST_PARTNER
+  LAUGHTER_PARTNER
+  CRYING_PARTNER
+  PRAYING_PARTNER
+  ADULT_STUDENT_PARTNER
+  EMOTIONAL_SUPPORT
+  OTHER_PARTNER
+
+  @@schema("public")
+}
+
+enum Religion {
+  CHRISTIAN
+  MUSLIM
+  TRADITIONAL
+  OTHER
+  NONE
+
+  @@schema("public")
+}
+
+enum FeedbackType {
+  COMPLAINT
+  SUGGESTION
+
+  @@schema("public")
+}
+
+enum BenefitScope {
+  SELF
+  BOTH
+
+  @@schema("public")
+}
+
+enum aal_level {
+  aal1
+  aal2
+  aal3
+
+  @@schema("auth")
+}
+
+enum code_challenge_method {
+  s256
+  plain
+
+  @@schema("auth")
+}
+
+enum factor_status {
+  unverified
+  verified
+
+  @@schema("auth")
+}
+
+enum factor_type {
+  totp
+  webauthn
+  phone
+
+  @@schema("auth")
+}
+
+enum oauth_authorization_status {
+  pending
+  approved
+  denied
+  expired
+
+  @@schema("auth")
+}
+
+enum oauth_client_type {
+  public
+  confidential
+
+  @@schema("auth")
+}
+
+enum oauth_registration_type {
+  dynamic
+  manual
+
+  @@schema("auth")
+}
+
+enum oauth_response_type {
+  code
+
+  @@schema("auth")
+}
+
+enum one_time_token_type {
+  confirmation_token
+  reauthentication_token
+  recovery_token
+  email_change_token_new
+  email_change_token_current
+  phone_change_token
+
+  @@schema("auth")
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  FAILED
+
+  @@schema("public")
+}
