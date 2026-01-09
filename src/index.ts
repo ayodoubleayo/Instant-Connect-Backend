@@ -53,12 +53,13 @@ app.use((req, res, next) => {
 /**
  * 🌍 CORS CONFIG (LOCAL + PRODUCTION)
  */
-const allowedOrigins = [
+
+const allowedOrigins: string[] = [
   "http://localhost:3000",
+  "https://instant-connect-frontend.vercel.app",
   "https://instant-connect-frontend-hnh01yaf4-ayodoubleayos-projects.vercel.app",
   "https://instant-connect-frontend-git-main-ayodoubleayos-projects.vercel.app",
-  "https://instant-connect-frontend.vercel.app",  // <-- newly added
-  process.env.FRONTEND_URL,                        // optional env override
+  process.env.FRONTEND_URL || "",
 ].filter(Boolean);
 
 app.use(
@@ -78,15 +79,6 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization", "x-request-id"],
   })
 );
-
-// Optional: handle all OPTIONS preflight requests explicitly
-app.options("*", cors({
-  origin: allowedOrigins,
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-request-id"]
-}));
-
 
 app.use(express.json());
 app.use(cookieParser());
