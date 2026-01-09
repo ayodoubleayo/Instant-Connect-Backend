@@ -1,9 +1,11 @@
 {
   "name": "myfriend-backend",
   "version": "1.0.0",
-  "private": true,  "scripts": {
+  "private": true,
+  "type": "module",
+  "scripts": {
     "dev": "tsx watch src/index.ts",
-"build": "tsc", 
+    "build": "tsc -p tsconfig.backend.json",
     "start": "node dist/src/index.js",
     "prisma": "prisma",
     "postinstall": "npm run build"

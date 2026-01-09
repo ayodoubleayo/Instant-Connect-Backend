@@ -140,28 +140,8 @@ export class AuthService {
     /**
      * Prisma = profile authority
      */
-/**
- * Prisma = profile authority
- */
-if (data.age === undefined) {
-  throw new Error("Age is required");
-}
 
-return prisma.user.create({
-  data: {
-    realName: data.realName,
-    username: data.username,
-    email: data.email,
-    gender: data.gender,
-    age: data.age, // now guaranteed number
-    location: data.location,
-    latitude: data.latitude,
-    longitude: data.longitude,
-    supabaseUserId: auth.user.id,
-  },
-});
 
-  }
   /* =========================
      FORGOT PASSWORD
   ========================== */

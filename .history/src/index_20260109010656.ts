@@ -5,9 +5,12 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import http from "http";
-import crypto from "crypto";
+import crypto frozm "crypto";
 
 // 🔗 ROUTES
+// src/index.ts
+import authRoutes from "./routes/auth.routes.js";  // <-- note .js
+
 import userRoutes from "./routes/user.routes";
 import paymentRoutes from "./routes/payment.routes";
 import adminRoutes from "./routes/admin.routes";
@@ -16,8 +19,6 @@ import matchRoutes from "./routes/match.routes";
 import uploadRoutes from "./routes/upload.routes";
 import feedbackRoutes from "./routes/feedback.routes"
 import { initSocket } from "./socket";
-// src/index.ts
-import authRoutes from "./routes/auth.routes";  // <-- note .js
 
 const app = express();
 

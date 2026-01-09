@@ -1,16 +1,20 @@
 {
   "name": "myfriend-backend",
   "version": "1.0.0",
-  "private": true,  "scripts": {
-    "dev": "tsx watch src/index.ts",
-"build": "tsc", 
-    "start": "node dist/src/index.js",
-    "prisma": "prisma",
-    "postinstall": "npm run build"
+  "private": true,
+  "type": "module",
+
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
-  },
+  "scripts": {
+  "dev": "tsx watch src/index.ts",
+  "build": "tsc -p tsconfig.backend.json",
+  "start": "node dist/src/index.js",
+  "prisma": "prisma",
+  "postinstall": "npm run build"
+}
+,
   "dependencies": {
     "@prisma/client": "^6.19.1",
     "@supabase/supabase-js": "^2.89.0",

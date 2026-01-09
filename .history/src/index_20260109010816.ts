@@ -17,7 +17,7 @@ import uploadRoutes from "./routes/upload.routes";
 import feedbackRoutes from "./routes/feedback.routes"
 import { initSocket } from "./socket";
 // src/index.ts
-import authRoutes from "./routes/auth.routes";  // <-- note .js
+import authRoutes from "./routes/auth.routes.js";  // <-- note .js
 
 const app = express();
 
