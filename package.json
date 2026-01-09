@@ -7,7 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "prisma": "prisma"
+    "prisma": "prisma",
+      "postinstall": "npm run build"
+
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
