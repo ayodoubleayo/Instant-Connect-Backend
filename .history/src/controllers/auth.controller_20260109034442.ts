@@ -32,11 +32,11 @@ export const login = async (req: Request, res: Response) => {
     const token = await AuthService.login(req.body);
 
     // ✅ UPDATED COOKIE CONFIG (CROSS-SITE SAFE)
-  res.cookie("token", token, {
-  httpOnly: true,
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  secure: process.env.NODE_ENV === "production",
-});
+    res.cookie("token", token, {
+      httpOnly: true,
+      sameSite: "none", // ✅ allow frontend on Vercel
+      secure: true,     // ✅ required for sameSite=none
+    });
 
     // 🔐 issue CSRF token after login
     setCsrfToken(res);

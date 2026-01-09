@@ -27,10 +27,11 @@ const login = async (req, res) => {
     try {
         (0, origin_1.verifyOrigin)(req);
         const token = await auth_service_1.AuthService.login(req.body);
+        // ✅ UPDATED COOKIE CONFIG (CROSS-SITE SAFE)
         res.cookie("token", token, {
             httpOnly: true,
-            sameSite: "lax",
-            secure: process.env.NODE_ENV === "production",
+            sameSite: "none", // ✅ allow frontend on Vercel
+            secure: true, // ✅ required for sameSite=none
         });
         // 🔐 issue CSRF token after login
         (0, csrf_1.setCsrfToken)(res);
@@ -51,8 +52,8 @@ const logout = async (req, res) => {
         (0, csrf_1.verifyCsrf)(req);
         res.clearCookie("token", {
             httpOnly: true,
-            sameSite: "lax",
-            secure: process.env.NODE_ENV === "production",
+            sameSite: "none",
+            secure: true,
         });
         res.clearCookie("csrf_token");
         return res.json({ ok: true });
