@@ -21,23 +21,39 @@ export function initSocket(httpServer: any) {
   console.log("🚀 [SOCKET] Initializing Socket.IO server");
 
   /* ---------- CORS ---------- */
-  const socketOrigins: string[] = [
-    "http://localhost:3000",
-    "https://instant-connect-frontend-hnh01yaf4-ayodoubleayos-projects.vercel.app",
-  ];
+  /* ---------- CORS ---------- */
+  const normalize = (url: string) =>
+    url.replace(/\/$/, "").toLowerCase();
 
-  if (process.env.FRONTEND_URL) {
-    socketOrigins.push(process.env.FRONTEND_URL);
-  }
+  const socketOrigins = [
+    "http://localhost:3000",
+    "https://instantconnect.jaodr.com", // ✅ NEW DOMAIN
+    "https://instant-connect-frontend-hnh01yaf4-ayodoubleayos-projects.vercel.app",
+    process.env.FRONTEND_URL,
+  ]
+    .filter((url): url is string => typeof url === "string")
+    .map(normalize);
 
   io = new Server(httpServer, {
     cors: {
-      origin: socketOrigins,
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+
+        const normalizedOrigin = normalize(origin);
+
+        if (socketOrigins.includes(normalizedOrigin)) {
+          return callback(null, true);
+        }
+
+        console.error("❌ [SOCKET][CORS] Blocked origin:", origin);
+        callback(new Error("Not allowed by Socket.IO CORS"));
+      },
       credentials: true,
       methods: ["GET", "POST"],
     },
     transports: ["websocket", "polling"],
   });
+;
 
   /* ================= AUTH ================= */
 io.use((socket, next) => {
