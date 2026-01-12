@@ -50,16 +50,28 @@ export class ChatService {
         err.code = "CHAT_LOCKED";
         throw err;
       }
-
       const msg = await tx.message.create({
-        data: {
-          matchId,
-          senderId,
-          content,
-          imageUrl,
-          clientId,
-        },
-      });
+  data: {
+    matchId,
+    senderId,
+    content,
+    imageUrl,
+    clientId,
+  },
+  select: {
+    id: true,
+    matchId: true,
+    senderId: true,
+    content: true,
+    imageUrl: true,
+    clientId: true,  // <-- crucial fix
+    createdAt: true,
+    deletedAt: true,
+    deliveredAt: true,
+    seenAt: true,
+  },
+});
+
 
       console.log("✅ [ChatService.send] message created", {
         id: msg.id,

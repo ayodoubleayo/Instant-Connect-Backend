@@ -1,6 +1,7 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
-import cookie from "cookie";
+import * as cookie from "cookie";
+
 import { ChatService } from "./services/chat.service";
 import { prisma } from "./lib/prisma";
 
@@ -19,7 +20,7 @@ const onlineUsers = new Map<string, Set<string>>();
 export function initSocket(httpServer: any) {
   console.log("🚀 [SOCKET] Initializing Socket.IO server");
 
-  /* ---------- CORS (LOCKED + TYPE-SAFE) ---------- */
+  /* ---------- CORS ---------- */
   const socketOrigins: string[] = [
     "http://localhost:3000",
     "https://instant-connect-frontend-hnh01yaf4-ayodoubleayos-projects.vercel.app",
@@ -39,27 +40,48 @@ export function initSocket(httpServer: any) {
   });
 
   /* ================= AUTH ================= */
-  io.use((socket, next) => {
-    try {
-      const raw = socket.handshake.headers.cookie;
-      if (!raw) return next(new Error("Unauthorized"));
+io.use((socket, next) => {
+  try {
+    let token: string | undefined;
 
-      const parsed = cookie.parse(raw);
-      const token = parsed.token;
-      if (!token) return next(new Error("Unauthorized"));
-
-      const decoded = jwt.verify(
-        token,
-        process.env.JWT_SECRET!
-      ) as any;
-
-      (socket as any).user = decoded;
-      next();
-    } catch (err) {
-      console.error("⛔ [SOCKET][AUTH] Failed", err);
-      next(new Error("Unauthorized"));
+    // 1️⃣ Try Authorization header (mobile / API clients)
+    const authHeader = socket.handshake.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.replace("Bearer ", "");
     }
-  });
+
+    // 2️⃣ Fallback to httpOnly cookie (web app)
+    if (!token && socket.handshake.headers.cookie) {
+      const cookies = cookie.parse(socket.handshake.headers.cookie);
+      token = cookies.token;
+    }
+
+    if (!token) {
+      console.error("⛔ [SOCKET][AUTH] No token found");
+      return next(new Error("Unauthorized"));
+    }
+
+    // 3️⃣ Verify JWT
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+
+    (socket as any).user = {
+      id: decoded.id,
+      role: decoded.role,
+    };
+
+    console.log("🔐 [SOCKET][AUTH] SUCCESS", {
+      userId: decoded.id,
+      socketId: socket.id,
+    });
+
+    next();
+  } catch (err) {
+    console.error("⛔ [SOCKET][AUTH] Failed", err);
+    next(new Error("Unauthorized"));
+  }
+});
+
+
 
   /* ================= CONNECTION ================= */
   io.on("connection", async (socket) => {
@@ -69,7 +91,6 @@ export function initSocket(httpServer: any) {
     if (!onlineUsers.has(userId)) {
       onlineUsers.set(userId, new Set());
     }
-
     onlineUsers.get(userId)!.add(socket.id);
 
     /* ---------- FIRST SOCKET = ONLINE ---------- */
@@ -78,7 +99,6 @@ export function initSocket(httpServer: any) {
         where: { id: userId },
         data: { isOnline: true, lastSeenAt: null },
       });
-
       io.emit("user:online", { userId });
     }
 
@@ -103,9 +123,7 @@ export function initSocket(httpServer: any) {
         if (!match) return;
 
         const otherUserId =
-          match.userAId === userId
-            ? match.userBId
-            : match.userAId;
+          match.userAId === userId ? match.userBId : match.userAId;
 
         const isOnline = onlineUsers.has(otherUserId);
 
@@ -124,6 +142,137 @@ export function initSocket(httpServer: any) {
         console.error("❌ [PRESENCE] sync error", err);
       }
     });
+
+
+socket.on(
+  "message:send",
+  async ({ matchId, content, imageUrl, clientId }, cb) => {
+    const flowId = Date.now();
+    console.log("📥 [SOCKET][SERVER][message:send] START", {
+      flowId,
+      matchId,
+      clientId,
+      senderId: (socket as any).user.id,
+      hasContent: !!content,
+    });
+
+    try {
+      const senderId = (socket as any).user.id;
+
+      console.log("💾 [SOCKET][SERVER] Calling ChatService.send", { flowId });
+      const msg = await ChatService.send(
+        senderId,
+        matchId,
+        content,
+        imageUrl,
+        clientId
+      );
+      console.log("💾 [SOCKET][SERVER] ChatService.send SUCCESS", {
+        flowId,
+        messageId: msg.id,
+        clientId: msg.clientId,
+      });
+
+      const room = `match:${matchId}`;
+      
+      // Check who's in the room
+      const socketsInRoom = await io.in(room).fetchSockets();
+      console.log("🔍 [SOCKET][SERVER] Room inspection BEFORE emit", {
+        flowId,
+        room,
+        socketCount: socketsInRoom.length,
+        socketIds: socketsInRoom.map((s) => s.id),
+      });
+
+      console.log("📤 [SOCKET][SERVER] Emitting message:new to room", {
+        flowId,
+        room,
+        messageId: msg.id,
+      });
+
+      io.to(room).emit("message:new", {
+        id: msg.id,
+        matchId: msg.matchId,
+        content: msg.content,
+        senderId: msg.senderId,
+        createdAt: msg.createdAt,
+        deliveredAt: msg.deliveredAt,
+        seenAt: msg.seenAt,
+        clientId: msg.clientId, // ✅ CRITICAL
+      });
+
+      console.log("✅ [SOCKET][SERVER] message:new emitted", { flowId });
+
+      console.log("📞 [SOCKET][SERVER] Sending ACK to sender", { flowId });
+      cb?.({ ok: true, message: msg });
+      console.log("✅ [SOCKET][SERVER] ACK sent", { flowId });
+
+      console.log("🏁 [SOCKET][SERVER][message:send] END SUCCESS", { flowId });
+    } catch (err: any) {
+      console.error("❌ [SOCKET][SERVER][message:send] FAILED", {
+        flowId,
+        error: err.message,
+      });
+      cb?.({ ok: false, error: err.message });
+    }
+  }
+);
+
+``
+
+
+    /* ================= DELETE MESSAGE ================= */
+    socket.on("message:delete", async ({ messageId }) => {
+      try {
+        const userId = (socket as any).user.id;
+
+        // 📝 Log when delete event arrives
+        console.log("📥 [SOCKET][SERVER] message:delete received", { messageId, userId });
+
+        // Service handles ownership + DB deletion
+        const msg = await ChatService.deleteMessage(messageId, userId);
+
+        // 📝 Log after service deletes message
+        console.log("🗄️ [SOCKET][SERVER] Message deleted in service", { messageId: msg.id, matchId: msg.matchId, userId });
+
+        // Broadcast deletion to everyone in the match room
+        io.to(`match:${msg.matchId}`).emit("message:deleted", {
+          messageId: msg.id,
+        });
+
+        // 📝 Log before broadcasting
+        console.log("📤 [SOCKET][SERVER] message:deleted emitted", { messageId: msg.id, matchId: msg.matchId });
+      } catch (err) {
+        console.error("❌ [SOCKET] message:delete failed", err);
+      }
+    });
+
+    /* ================= MESSAGE SEEN ================= */
+socket.on("message:seen", async ({ matchId, messageId }) => {
+  try {
+    const userId = (socket as any).user.id;
+
+    console.log("📥 [SOCKET][SERVER] message:seen received", { matchId, messageId, userId });
+
+    // Update DB (mark message as seen)
+    await prisma.message.updateMany({
+      where: { id: messageId },
+      data: { seenAt: new Date() },
+    });
+
+    // Broadcast to everyone in the match room
+    io.to(`match:${matchId}`).emit("message:seen", {
+      messageId,
+      matchId,
+      seenBy: userId, // optional: useful if you want to track who saw it
+    });
+
+    console.log("📤 [SOCKET][SERVER] message:seen emitted", { messageId, matchId });
+  } catch (err) {
+    console.error("❌ [SOCKET][SERVER] message:seen failed", err);
+  }
+});
+
 
     /* ================= DISCONNECT ================= */
     socket.on("disconnect", async () => {

@@ -1,9 +1,10 @@
 {
   "name": "myfriend-backend",
   "version": "1.0.0",
-  "private": true,  "scripts": {
+  "private": true,
+  "scripts": {
     "dev": "tsx watch src/index.ts",
-"build": "tsc", 
+    "build": "tsc",
     "start": "node dist/src/index.js",
     "prisma": "prisma",
     "postinstall": "npm run build"
@@ -25,6 +26,7 @@
     "multer-storage-cloudinary": "^4.0.0",
     "node-cron": "^4.2.1",
     "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.3",
     "zod": "^4.2.1"
   },
   "devDependencies": {

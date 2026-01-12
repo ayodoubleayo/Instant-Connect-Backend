@@ -133,9 +133,13 @@ export const deleteMessage = async (req: any, res: Response) => {
 
   const msg = await ChatService.deleteMessage(messageId, userId);
 
-  getIO()
-    .to(`match:${msg.matchId}`)
-    .emit("message:deleted", msg.id);
+getIO()
+  .to(`match:${msg.matchId}`)
+ .emit("message:deleted", {
+  messageId: msg.id,
+  clientId: msg.clientId,
+});
+
 
   res.json({ ok: true });
 };
