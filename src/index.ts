@@ -59,6 +59,7 @@ const allowedOrigins: string[] = [
   "https://instant-connect-frontend.vercel.app",
   "https://instant-connect-frontend-hnh01yaf4-ayodoubleayos-projects.vercel.app",
   "https://instant-connect-frontend-git-main-ayodoubleayos-projects.vercel.app",
+  "https://instantconnect.jaodr.com",
   process.env.FRONTEND_URL?.replace(/\/$/, ""), // could be undefined
 ].filter((o): o is string => !!o); // <-- TypeScript knows undefined is filtered out
 
