@@ -17,10 +17,11 @@ export const uploadPhoto = async (req: any, res: any) => {
     if (count >= 5) {
       return res.status(400).json({ message: "Maximum 5 photos allowed" });
     }
+const upload = await cloudinary.uploader.upload(
+  `data:${file.mimetype};base64,${file.buffer.toString("base64")}`,
+  { folder: "myfriend/users" }
+);
 
-    const upload = await cloudinary.uploader.upload(file.path, {
-      folder: "myfriend/users",
-    });
 
     const photo = await prisma.photo.create({
       data: {

@@ -6,8 +6,13 @@ import { authMiddleware } from "../middleware/auth.middleware";
 const router = Router();
 
 // temp local storage (Cloudinary will take it from here)
-const upload = multer({ dest: "uploads/" });
 
+
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
 // POST /upload
 router.post(
   "/",
