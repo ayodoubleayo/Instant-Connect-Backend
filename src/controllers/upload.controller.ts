@@ -42,7 +42,9 @@ const upload = await cloudinary.uploader.upload(
       url: photo.url,
       photoCount: count + 1,
     });
-  } catch {
-    res.status(400).json({ message: "Upload failed" });
-  }
+} catch (err) {
+  console.error("❌ Upload error:", err);
+  res.status(500).json({ message: "Upload failed" });
+}
+
 };
