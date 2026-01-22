@@ -197,3 +197,39 @@ export const getPublicProfile = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Failed to load user" });
   }
 };
+
+
+export const deletePhoto = async (req: Request, res: Response) => {
+  const requestId = (req as any).requestId;
+  console.log("🟢 [UsersController:deletePhoto] START", { requestId });
+
+  try {
+    const me = (req as any).user;
+    const { photoId } = req.params;
+
+    if (!me) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const photo = await prisma.photo.findFirst({
+      where: {
+        id: photoId,
+        userId: me.id,
+      },
+    });
+
+    if (!photo) {
+      return res.status(404).json({ message: "Photo not found" });
+    }
+
+    await prisma.photo.delete({
+      where: { id: photo.id },
+    });
+
+    console.log("🟢 [deletePhoto] SUCCESS", { requestId, photoId });
+    return res.status(204).send();
+  } catch (err) {
+    console.error("❌ [deletePhoto] ERROR", { requestId, err });
+    return res.status(500).json({ message: "Failed to delete photo" });
+  }
+};

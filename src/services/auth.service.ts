@@ -20,19 +20,39 @@ export class AuthService {
       throw new Error("Invalid credentials");
     }
 
-    /**
-     * CASE 1: Already migrated → Supabase owns password
-     */
+    /* ==========================================
+       🔴 OLD PROBLEM:
+       Migrated users were getting JWT
+       WITHOUT password verification
+    ========================================== */
+
+    /* ==========================================
+       🟢 UPDATE #1 — AUTHENTICATE MIGRATED USERS
+       WHY:
+       Supabase is now the auth authority.
+       Passwords must be verified there.
+    ========================================== */
     if (user.supabaseUserId) {
+      const { data: authData, error } =
+        await supabaseAdmin.auth.signInWithPassword({
+          email: data.email,
+          password: data.password,
+        });
+
+      if (error || !authData.user) {
+        throw new Error("Invalid credentials");
+      }
+
       return AuthService.issueToken({
         id: user.id,
         role: user.role,
       });
     }
 
-    /**
-     * CASE 2: Legacy bcrypt user
-     */
+    /* ==========================================
+       LEGACY USERS (PRE-SUPABASE)
+    ========================================== */
+
     if (!user.password) {
       throw new Error("Invalid credentials");
     }
@@ -42,14 +62,16 @@ export class AuthService {
       throw new Error("Invalid credentials");
     }
 
-    /**
-     * MIGRATION (SAFE & SUPABASE-CORRECT)
-     * - Try create
-     * - If already exists → locate via listUsers
-     */
+    /* ==========================================
+       🟢 UPDATE #2 — MIGRATION HAPPENS ONLY AFTER
+       LEGACY PASSWORD IS VERIFIED
+       WHY:
+       Prevents unauthorized migration
+    ========================================== */
+
     let supabaseUserId: string;
 
-    const { data: created, error } =
+    const { data: created } =
       await supabaseAdmin.auth.admin.createUser({
         email: user.email,
         password: data.password,
@@ -57,10 +79,8 @@ export class AuthService {
       });
 
     if (created?.user) {
-      // ✅ Fresh Supabase user created
       supabaseUserId = created.user.id;
     } else {
-      // ✅ Likely already exists (e.g. reset password earlier)
       const { data: list } =
         await supabaseAdmin.auth.admin.listUsers({
           page: 1,
@@ -78,14 +98,11 @@ export class AuthService {
       supabaseUserId = existingUser.id;
     }
 
-    /**
-     * Finalize migration in local DB
-     */
     await prisma.user.update({
       where: { id: user.id },
       data: {
         supabaseUserId,
-        password: null,
+        password: null, // 🔐 password is permanently removed
       },
     });
 
@@ -96,7 +113,7 @@ export class AuthService {
   }
 
   /* =========================
-     REGISTER
+     REGISTER (CORRECT)
   ========================== */
   static async register(data: {
     realName: string;
@@ -109,8 +126,17 @@ export class AuthService {
     latitude?: number;
     longitude?: number;
   }) {
-    if (!data.email || !data.password || !data.username || !data.realName) {
+    if (
+      !data.realName ||
+      !data.username ||
+      !data.email ||
+      !data.password
+    ) {
       throw new Error("Missing required fields");
+    }
+
+    if (data.age === undefined) {
+      throw new Error("Age is required");
     }
 
     const exists = await prisma.user.findFirst({
@@ -123,9 +149,9 @@ export class AuthService {
       throw new Error("User already exists");
     }
 
-    /**
-     * Supabase = auth authority
-     */
+    /* ==========================================
+       Supabase = AUTH AUTHORITY
+    ========================================== */
     const { data: auth, error } =
       await supabaseAdmin.auth.admin.createUser({
         email: data.email,
@@ -137,31 +163,30 @@ export class AuthService {
       throw new Error("Authentication setup failed");
     }
 
-    /**
-     * Prisma = profile authority
-     */
-/**
- * Prisma = profile authority
- */
-if (data.age === undefined) {
-  throw new Error("Age is required");
-}
+    /* ==========================================
+       Prisma = PROFILE AUTHORITY
+    ========================================== */
+    const user = await prisma.user.create({
+      data: {
+        realName: data.realName,
+        username: data.username,
+        email: data.email,
+        gender: data.gender,
+        age: data.age,
+        location: data.location,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        supabaseUserId: auth.user.id,
+        role: "USER",
+      },
+    });
 
-return prisma.user.create({
-  data: {
-    realName: data.realName,
-    username: data.username,
-    email: data.email,
-    gender: data.gender,
-    age: data.age, // now guaranteed number
-    location: data.location,
-    latitude: data.latitude,
-    longitude: data.longitude,
-    supabaseUserId: auth.user.id,
-  },
-});
-
+    return AuthService.issueToken({
+      id: user.id,
+      role: user.role,
+    });
   }
+
   /* =========================
      FORGOT PASSWORD
   ========================== */
@@ -173,12 +198,12 @@ return prisma.user.create({
         redirectTo: `${process.env.FRONTEND_URL}/reset-password`,
       });
     } catch {
-      // anti-enumeration by design
+      // anti-enumeration
     }
   }
 
   /* =========================
-     APP TOKEN (NOT AUTH)
+     APP TOKEN (SESSION ONLY)
   ========================== */
   private static issueToken(payload: { id: string; role: string }) {
     if (!process.env.JWT_SECRET) {

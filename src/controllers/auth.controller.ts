@@ -4,7 +4,7 @@ import { setCsrfToken, verifyCsrf } from "../security/csrf";
 import { verifyOrigin } from "../security/origin";
 
 /* =========================
-   REGISTER
+   REGISTER (CORRECTED)
 ========================= */
 export const register = async (req: Request, res: Response) => {
   console.log("🟢 [REGISTER][CONTROLLER] Request received");
@@ -12,7 +12,18 @@ export const register = async (req: Request, res: Response) => {
   try {
     verifyOrigin(req);
 
-    await AuthService.register(req.body);
+    // ✅ RECEIVE TOKEN
+    const token = await AuthService.register(req.body);
+
+    // ✅ SET COOKIE (SAME AS LOGIN)
+    res.cookie("token", token, {
+      httpOnly: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    // ✅ ISSUE CSRF
+    setCsrfToken(res);
 
     return res.status(201).json({ ok: true });
   } catch (err: any) {
@@ -31,14 +42,12 @@ export const login = async (req: Request, res: Response) => {
 
     const token = await AuthService.login(req.body);
 
-    // ✅ UPDATED COOKIE CONFIG (CROSS-SITE SAFE)
-  res.cookie("token", token, {
-  httpOnly: true,
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  secure: process.env.NODE_ENV === "production",
-});
+    res.cookie("token", token, {
+      httpOnly: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
 
-    // 🔐 issue CSRF token after login
     setCsrfToken(res);
 
     return res.json({ ok: true });
@@ -49,6 +58,8 @@ export const login = async (req: Request, res: Response) => {
 
 /* =========================
    LOGOUT
+========================= *//* =========================
+   LOGOUT (FIXED)
 ========================= */
 export const logout = async (req: Request, res: Response) => {
   console.log("🟢 [LOGOUT][CONTROLLER] Request received");
@@ -57,13 +68,18 @@ export const logout = async (req: Request, res: Response) => {
     verifyOrigin(req);
     verifyCsrf(req);
 
+    // ✅ MATCH cookie options with login/register
     res.clearCookie("token", {
       httpOnly: true,
-      sameSite: "none",
-      secure: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
     });
 
-    res.clearCookie("csrf_token");
+    res.clearCookie("csrf_token", {
+      httpOnly: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
 
     return res.json({ ok: true });
   } catch (err: any) {
@@ -85,9 +101,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
       message: "If an account exists, a reset link has been sent",
     });
   } catch {
-    // anti-enumeration preserved
     return res.json({
       message: "If an account exists, a reset link has been sent",
     });
   }
 };
+
