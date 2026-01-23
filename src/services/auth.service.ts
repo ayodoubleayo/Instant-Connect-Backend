@@ -77,9 +77,9 @@ export class AuthService {
           perPage: 1000,
         });
 
-      const existingUser = list?.users.find(
-        (u) => u.email.toLowerCase() === email // 🔴 case-insensitive match
-      );
+   const existingUser = list?.users.find(
+  (u) => u.email && u.email.toLowerCase() === email
+);
 
       if (!existingUser) {
         throw new Error("Account migration failed");
