@@ -2,18 +2,22 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma";
 import { supabaseAdmin } from "../lib/supabaseAdmin";
+import { RelationshipIntent } from "@prisma/client";
 
 export class AuthService {
   /* =========================
-     LOGIN (MIGRATION-SAFE)
+     LOGIN (MIGRATION-SAFE, CASE-INSENSITIVE)
   ========================== */
   static async login(data: { email: string; password: string }) {
     if (!data?.email || !data?.password) {
       throw new Error("Invalid credentials");
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: data.email },
+    const email = data.email.trim().toLowerCase(); // 🔴 normalize email
+
+    // Prisma query now uses lowercase email for consistency
+    const user = await prisma.user.findFirst({
+      where: { email },
     });
 
     if (!user) {
@@ -21,21 +25,12 @@ export class AuthService {
     }
 
     /* ==========================================
-       🔴 OLD PROBLEM:
-       Migrated users were getting JWT
-       WITHOUT password verification
-    ========================================== */
-
-    /* ==========================================
-       🟢 UPDATE #1 — AUTHENTICATE MIGRATED USERS
-       WHY:
-       Supabase is now the auth authority.
-       Passwords must be verified there.
+       MIGRATED USERS — SUPABASE AUTH
     ========================================== */
     if (user.supabaseUserId) {
       const { data: authData, error } =
         await supabaseAdmin.auth.signInWithPassword({
-          email: data.email,
+          email, // normalized lowercase
           password: data.password,
         });
 
@@ -52,7 +47,6 @@ export class AuthService {
     /* ==========================================
        LEGACY USERS (PRE-SUPABASE)
     ========================================== */
-
     if (!user.password) {
       throw new Error("Invalid credentials");
     }
@@ -63,17 +57,13 @@ export class AuthService {
     }
 
     /* ==========================================
-       🟢 UPDATE #2 — MIGRATION HAPPENS ONLY AFTER
-       LEGACY PASSWORD IS VERIFIED
-       WHY:
-       Prevents unauthorized migration
+       MIGRATE LEGACY PASSWORD AFTER VERIFICATION
     ========================================== */
-
     let supabaseUserId: string;
 
     const { data: created } =
       await supabaseAdmin.auth.admin.createUser({
-        email: user.email,
+        email, // normalized email
         password: data.password,
         email_confirm: true,
       });
@@ -88,7 +78,7 @@ export class AuthService {
         });
 
       const existingUser = list?.users.find(
-        (u) => u.email === user.email
+        (u) => u.email.toLowerCase() === email // 🔴 case-insensitive match
       );
 
       if (!existingUser) {
@@ -102,7 +92,7 @@ export class AuthService {
       where: { id: user.id },
       data: {
         supabaseUserId,
-        password: null, // 🔐 password is permanently removed
+        password: null, // 🔐 remove legacy password
       },
     });
 
@@ -113,7 +103,7 @@ export class AuthService {
   }
 
   /* =========================
-     REGISTER (CORRECT)
+     REGISTER (CASE-INSENSITIVE EMAIL)
   ========================== */
   static async register(data: {
     realName: string;
@@ -125,23 +115,22 @@ export class AuthService {
     location?: string;
     latitude?: number;
     longitude?: number;
+    relationshipIntent?: RelationshipIntent;
+    phone?: string;
   }) {
-    if (
-      !data.realName ||
-      !data.username ||
-      !data.email ||
-      !data.password
-    ) {
+    if (!data.realName || !data.username || !data.email || !data.password) {
       throw new Error("Missing required fields");
     }
 
-    if (data.age === undefined) {
-      throw new Error("Age is required");
-    }
+    if (!data.phone) throw new Error("Phone number is required");
+    if (!data.relationshipIntent) throw new Error("Relationship intent is required");
+    if (data.age === undefined) throw new Error("Age is required");
+
+    const email = data.email.trim().toLowerCase(); // 🔴 normalize email
 
     const exists = await prisma.user.findFirst({
       where: {
-        OR: [{ email: data.email }, { username: data.username }],
+        OR: [{ email }, { username: data.username }],
       },
     });
 
@@ -154,7 +143,7 @@ export class AuthService {
     ========================================== */
     const { data: auth, error } =
       await supabaseAdmin.auth.admin.createUser({
-        email: data.email,
+        email,
         password: data.password,
         email_confirm: true,
       });
@@ -170,12 +159,14 @@ export class AuthService {
       data: {
         realName: data.realName,
         username: data.username,
-        email: data.email,
+        email, // normalized
         gender: data.gender,
         age: data.age,
         location: data.location,
         latitude: data.latitude,
         longitude: data.longitude,
+        relationshipIntent: data.relationshipIntent || null,
+        phone: data.phone || null,
         supabaseUserId: auth.user.id,
         role: "USER",
       },
@@ -188,13 +179,12 @@ export class AuthService {
   }
 
   /* =========================
-     FORGOT PASSWORD
+     FORGOT PASSWORD (CASE-INSENSITIVE)
   ========================== */
   static async forgotPassword(email: string) {
     if (!email) return;
-
     try {
-      await supabaseAdmin.auth.resetPasswordForEmail(email, {
+      await supabaseAdmin.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
         redirectTo: `${process.env.FRONTEND_URL}/reset-password`,
       });
     } catch {
@@ -203,15 +193,13 @@ export class AuthService {
   }
 
   /* =========================
-     APP TOKEN (SESSION ONLY)
+     JWT ISSUER
   ========================== */
   private static issueToken(payload: { id: string; role: string }) {
     if (!process.env.JWT_SECRET) {
       throw new Error("JWT secret missing");
     }
 
-    return jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: "15m",
-    });
+    return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "15m" });
   }
 }

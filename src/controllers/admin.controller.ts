@@ -116,6 +116,8 @@ export const getAdminUsers = async (req: Request, res: Response) => {
         id: true,
         username: true,
         email: true,
+          phone: true, 
+
         role: true,
         suspended: true,
         createdAt: true,
